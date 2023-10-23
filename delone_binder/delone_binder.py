@@ -1,5 +1,7 @@
 from typing import List, Tuple
 
+import numpy as np
+
 
 class Node:
     def __init__(self, x:float, y:float):
@@ -17,6 +19,27 @@ class Edge:
     def get_line(self):
         return [self.node1.x, self.node2.x], [self.node1.y, self.node2.y]
 
+    def get_size(self):
+        return np.sqrt((self.node1.x - self.node2.x)**2 + (self.node1.y - self.node2.y)**2)
+
+    def opt(self):
+        size_ = self.get_size()
+        triangles = [self.triangle1, self.triangle2]
+        for triangle in triangles:
+            for edge in triangle.edges:
+                if edge.get_size() > size_:
+                    return
+
+        n2 = self.node1
+        n4 = self.node2
+        for node in self.triangle1.get_nodes():
+            if not (node in [n2, n4]):
+                n1 = node
+
+        for node in self.triangle2.get_nodes():
+            if not (node in [n2, n4]):
+                n3 = node
+
 
 class Triangle:
     def __init__(self, e1: Edge, e2: Edge, e3: Edge):
@@ -30,7 +53,6 @@ class Triangle:
         s3 = self.area_triangle([n3, n1, node])
         print(s0, s1, s2, s3)
         return s1+s2+s3 <= s0
-
 
     def area_triangle(self, nodes: List[Node]) -> float:
         # шнуровка Гаусса
@@ -46,7 +68,6 @@ class Triangle:
 
         return abs((s_2 - s_1) / 2)
 
-
     def get_nodes(self) -> Tuple[Node, Node, Node]:
         n1 = self.edges[0].node1
         n2 = self.edges[0].node2
@@ -60,22 +81,60 @@ class Triangle:
         t1 = Triangle(edges[0], edges[1], self.edges[0])
         t2 = Triangle(edges[1], edges[2], self.edges[1])
         t3 = Triangle(edges[2], edges[0], self.edges[2])
+
+        edges[0].triangle1 = t1
+        edges[0].triangle2 = t3
+
+        edges[1].triangle1 = t1
+        edges[1].triangle2 = t2
+
+        edges[2].triangle1 = t2
+        edges[2].triangle2 = t3
+
         return t1, t2, t3, edges[0], edges[1], edges[2]
+
+    def get_edge_node(self):
+        n1 = self.edges[0].node1
+        n2 = self.edges[0].node2
+        e3 = self.edges[0]
+        if self.edges[1].node1 in (n1, n2):
+            n3 = self.edges[1].node2
+            if self.edges[1].node1 == n1:
+                e2 = self.edges[1]
+                e1 = self.edges[2]
+            else:
+                e2 = self.edges[2]
+                e1 = self.edges[1]
+        else:
+            n3 = self.edges[1].node1
+            if self.edges[1].node2 == n1:
+                e2 = self.edges[1]
+                e1 = self.edges[2]
+            else:
+                e2 = self.edges[2]
+                e1 = self.edges[1]
+        return [n1, n2, n3], [e1, e2, e3]
 
 
 class DeloneBinder:
     def __init__(self):
         pass
 
-    def bind(self, nodes: List[Node]):
-        edges = [Edge(nodes[0], nodes[1]), Edge(nodes[1], nodes[2]), Edge(nodes[2], nodes[0])]
-        triangles = [Triangle(edges[0], edges[1], edges[2])]
-        for edge in edges:
-            edge.triangle1 = triangles[0]
-        for node in nodes[3:]:
+    def bind(self, nodes: List[Node], frame: List[Node]):
 
+        edges = [Edge(frame[0], frame[1]), Edge(frame[1], frame[2]), Edge(frame[2], frame[0]),
+                 Edge(frame[3], frame[0]), Edge(frame[3], frame[2])]
+        triangles = [Triangle(edges[0], edges[1], edges[2]), Triangle(edges[2], edges[3], edges[4])]
+
+        for edge in edges[:3]:
+            edge.triangle1 = triangles[0]
+        for edge in edges[3:]:
+            edge.triangle1 = triangles[1]
+        edges[2].triangle2 = triangles[1]
+
+        for node in nodes:
             self._add_node(node, edges, triangles)
-        print(triangles[0].edges[0].node1, triangles[0].edges[0].node2, triangles[0].edges[1].node2, )
+
         return edges
 
     def _add_node(self, node: Node, edges, triangles):
@@ -85,6 +144,8 @@ class DeloneBinder:
                 triangles.pop(i)
                 for t_ in [t1, t2, t3]:
                     triangles.append(t_)
+                    for e_ in t_.edges:
+                        e_.opt()
                 for e_ in [e1, e2, e3]:
                     edges.append(e_)
                 return
