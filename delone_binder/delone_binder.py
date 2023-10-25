@@ -1,154 +1,73 @@
 from typing import List, Tuple
 
 import numpy as np
+from scipy.spatial import Delaunay
 
 
 class Node:
-    def __init__(self, x:float, y:float):
+    def __init__(self, x, y):
         self.x = x
         self.y = y
 
 
 class Edge:
-    def __init__(self, n1: Node, n2: Node, t1: "Triangle" = None, t2: "Triangle" = None):
-        self.node1 = n1
-        self.node2 = n2
-        self.triangle1 = t1
-        self.triangle2 = t2
+    def __init__(self, node1: Node, node2: Node):
+        self.node1 = node1
+        self.node2 = node2
+        self.width = self.__get_size()
 
-    def get_line(self):
-        return [self.node1.x, self.node2.x], [self.node1.y, self.node2.y]
-
-    def get_size(self):
+    def __get_size(self):
         return np.sqrt((self.node1.x - self.node2.x)**2 + (self.node1.y - self.node2.y)**2)
 
-    def opt(self):
-        size_ = self.get_size()
-        triangles = [self.triangle1, self.triangle2]
-        for triangle in triangles:
-            for edge in triangle.edges:
-                if edge.get_size() > size_:
-                    return
-
-        n2 = self.node1
-        n4 = self.node2
-        for node in self.triangle1.get_nodes():
-            if not (node in [n2, n4]):
-                n1 = node
-
-        for node in self.triangle2.get_nodes():
-            if not (node in [n2, n4]):
-                n3 = node
+    def get_lines(self) -> Tuple[List[float], List[float]]:
+        return [self.node1.x, self.node2.x], [self.node1.y, self.node2.y]
 
 
 class Triangle:
-    def __init__(self, e1: Edge, e2: Edge, e3: Edge):
-        self.edges = [e1, e2, e3]
+    def __init__(self, node1, node2, node3):
+        self.node1 = node1
+        self.node2 = node2
+        self.node3 = node3
+        self.area = self.__get_area()
 
-    def is_contain(self, node: Node) -> bool:
-        n1, n2, n3 = self.get_nodes()
-        s0 = self.area_triangle([n1, n2, n3])
-        s1 = self.area_triangle([n1, n2, node])
-        s2 = self.area_triangle([n2, n3, node])
-        s3 = self.area_triangle([n3, n1, node])
-        print(s0, s1, s2, s3)
-        return s1+s2+s3 <= s0
-
-    def area_triangle(self, nodes: List[Node]) -> float:
-        # шнуровка Гаусса
+    def __get_area(self):
         s_1 = 0
         s_2 = 0
-        node_prev = nodes[-1]
-        for node in nodes:
-            x, y = node.x, node.y
-            x_prev, y_prev = node_prev.x, node_prev.y
-            node_prev = node
+        point_prev = self.node3
+        for point in [self.node1, self.node2, self.node3]:
+            x, y = point.x, point.y
+            x_prev, y_prev = point_prev.x, point_prev.y
+            point_prev = point
             s_1 += y * x_prev
             s_2 += x * y_prev
 
         return abs((s_2 - s_1) / 2)
-
-    def get_nodes(self) -> Tuple[Node, Node, Node]:
-        n1 = self.edges[0].node1
-        n2 = self.edges[0].node2
-        n3 = self.edges[1].node1 if self.edges[1].node2 in [n1, n2] else self.edges[1].node2
-        return n1, n2, n3
-
-    def diff3(self, node: Node) -> Tuple["Triangle", "Triangle", "Triangle", Edge, Edge, Edge]:
-        nodes = self.get_nodes()
-        edges = [Edge(node, n_) for n_ in nodes]
-
-        t1 = Triangle(edges[0], edges[1], self.edges[0])
-        t2 = Triangle(edges[1], edges[2], self.edges[1])
-        t3 = Triangle(edges[2], edges[0], self.edges[2])
-
-        edges[0].triangle1 = t1
-        edges[0].triangle2 = t3
-
-        edges[1].triangle1 = t1
-        edges[1].triangle2 = t2
-
-        edges[2].triangle1 = t2
-        edges[2].triangle2 = t3
-
-        return t1, t2, t3, edges[0], edges[1], edges[2]
-
-    def get_edge_node(self):
-        n1 = self.edges[0].node1
-        n2 = self.edges[0].node2
-        e3 = self.edges[0]
-        if self.edges[1].node1 in (n1, n2):
-            n3 = self.edges[1].node2
-            if self.edges[1].node1 == n1:
-                e2 = self.edges[1]
-                e1 = self.edges[2]
-            else:
-                e2 = self.edges[2]
-                e1 = self.edges[1]
-        else:
-            n3 = self.edges[1].node1
-            if self.edges[1].node2 == n1:
-                e2 = self.edges[1]
-                e1 = self.edges[2]
-            else:
-                e2 = self.edges[2]
-                e1 = self.edges[1]
-        return [n1, n2, n3], [e1, e2, e3]
 
 
 class DeloneBinder:
     def __init__(self):
         pass
 
-    def bind(self, nodes: List[Node], frame: List[Node]):
+    def bind(self, nodes: List[Node]) -> Tuple[List[Edge], List[Triangle]]:
+        points = np.array([(node.x, node.y) for node in nodes])
+        delone = Delaunay(points)
+        edges = self.__get_edges_from_delone(delone, nodes)
+        triangles = self.__get_triangles_from_delone(delone, nodes)
+        return edges, triangles
 
-        edges = [Edge(frame[0], frame[1]), Edge(frame[1], frame[2]), Edge(frame[2], frame[0]),
-                 Edge(frame[3], frame[0]), Edge(frame[3], frame[2])]
-        triangles = [Triangle(edges[0], edges[1], edges[2]), Triangle(edges[2], edges[3], edges[4])]
+    def __get_edges_from_delone(self, delone: Delaunay, nodes: List[Node]) -> List[Edge]:
+        edges = set([])
+        for tr in delone.simplices:
+            edges.add(frozenset([tr[0], tr[1]]))
+            edges.add(frozenset([tr[1], tr[2]]))
+            edges.add(frozenset([tr[2], tr[0]]))
 
-        for edge in edges[:3]:
-            edge.triangle1 = triangles[0]
-        for edge in edges[3:]:
-            edge.triangle1 = triangles[1]
-        edges[2].triangle2 = triangles[1]
-
-        for node in nodes:
-            self._add_node(node, edges, triangles)
-
+        edges = [list(edge) for edge in list(edges)]
+        edges = [Edge(nodes[edge[0]], nodes[edge[1]]) for edge in edges]
         return edges
 
-    def _add_node(self, node: Node, edges, triangles):
-        for i, triangle in enumerate(triangles):
-            if triangle.is_contain(node):
-                t1, t2, t3, e1, e2, e3 = triangle.diff3(node)
-                triangles.pop(i)
-                for t_ in [t1, t2, t3]:
-                    triangles.append(t_)
-                    for e_ in t_.edges:
-                        e_.opt()
-                for e_ in [e1, e2, e3]:
-                    edges.append(e_)
-                return
-
-
-
+    def __get_triangles_from_delone(self, delone: Delaunay, nodes: List[Node]) -> List[Triangle]:
+        triangles = []
+        for tr in delone.simplices:
+            triangles.append(Triangle(nodes[tr[0]], nodes[tr[1]], nodes[tr[2]]))
+        return triangles

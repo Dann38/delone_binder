@@ -1,15 +1,22 @@
 import matplotlib.pyplot as plt
-from delone_binder.delone_binder import Node, Edge, Triangle, DeloneBinder
 
-my_coordinates = [(5, 6), (6, 5)] #, (3, 5)
-coordinates = [Node(*my_coordinate) for my_coordinate in my_coordinates]
-
+from delone_binder.delone_binder import DeloneBinder, Node
 
 delone_binder = DeloneBinder()
-edges = delone_binder.bind(coordinates, [Node(7, 7), Node(0, 7),  Node(0, 0), Node(7, 0)])
+points = [Node(1, 2), Node(3, 5), Node(6, 3), Node(2, 6), Node(3, 9)]
+
+edges, triangles = delone_binder.bind(points)
 
 for edge in edges:
-    x, y = edge.get_line()
-    plt.plot(x, y, "k")
-
+    x, y = edge.get_lines()
+    plt.plot(x, y, "b")
+    plt.plot(x, y, "ro")
 plt.show()
+
+
+
+
+
+
+
+
